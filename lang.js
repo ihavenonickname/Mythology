@@ -58,6 +58,10 @@ const tokens = [
     {
         name: 'or',
         pattern: /^\|\|/
+    },
+    {
+        name: 'boolean',
+        pattern: /^(true)|(false)\b/
     }
 ]
 
@@ -239,12 +243,21 @@ const numericExpressionLevel3 = (symbols) => {
     } else {
         const symbol = symbols[0];
 
-        consume('number')(symbols);
-
-        semanticStack.push({
-            construction: 'literal',
-            value: parseFloat(symbol.lexeme)
-        });
+        if (tryConsume('number')(symbols)) {
+            semanticStack.push({
+                construction: 'literal',
+                value: symbol.lexeme,
+                tokenName: 'number'
+            });
+        } else if (tryConsume('boolean')(symbols)) {
+            semanticStack.push({
+                construction: 'literal',
+                value: symbol.lexeme,
+                tokenName: 'boolean'
+            });
+        } else {
+            throw 'Invalid token, expecting literal or left parenthesis: ' + symbol[0];
+        }
     }
 
     if (isNegative) {
@@ -265,10 +278,22 @@ const generateAST = (symbols) => {
 }
 
 const analyzeLiteral = ast => {
-    return {
-        ok: true,
-        type: 'numeric'
+    let response = {
+        ok: true
     };
+
+    switch (ast.tokenName) {
+        case 'number':
+            response.type = 'numeric'
+            break;
+        case 'boolean':
+            response.type = 'boolean'
+            break;
+        default:
+            throw 'Bad token name: ' + ast.tokenName;
+    }
+
+    return response;
 }
 
 const analyzeBinaryExpression = ast => {
@@ -302,22 +327,22 @@ const analyzeBinaryExpression = ast => {
         };
     }
 
-    const numericOperators = ['plus', 'minus', 'asterisk', 'slash'];
-
-    if (numericOperators.indexOf(ast.operator) !== -1) {
-        return checkTypes('numeric')('numeric');
-    }
-
-    const comparisonOperators = ['equal', 'different', 'greater', 'greater or equal', 'less', 'less or equal'];
-
-    if (comparisonOperators.indexOf(ast.operator) !== -1) {
-        return checkTypes('numeric')('boolean');
-    }
-
-    const logicOperators = ['and', 'or'];
-
-    if (logicOperators.indexOf(ast.operator) !== -1) {
-        return checkTypes('boolean')('boolean');
+    switch (ast.operator) {
+        case 'plus':
+        case 'minus':
+        case 'asterisk':
+        case 'slash':
+            return checkTypes('numeric')('numeric');
+        case 'equal':
+        case 'different':
+        case 'greater':
+        case 'greater or equal':
+        case 'less':
+        case 'less or equal':
+            return checkTypes('numeric')('boolean');
+        case 'and':
+        case 'or':
+            return checkTypes('boolean')('boolean');
     }
 
     throw 'Bad operator: ' + ast.operator;
@@ -346,13 +371,13 @@ const analyzeUnaryExpression = ast => {
 
 const analyze = ast => {
     switch (ast.construction) {
-    case 'literal':
-        return analyzeLiteral(ast);
-    case 'binary expression':
-        return analyzeBinaryExpression(ast);
-    case 'unary expression':
-        return analyzeUnaryExpression(ast);
-    default:
-        throw 'Undefined Construction: ' + ast.construction;
+        case 'literal':
+            return analyzeLiteral(ast);
+        case 'binary expression':
+            return analyzeBinaryExpression(ast);
+        case 'unary expression':
+            return analyzeUnaryExpression(ast);
+        default:
+            throw 'Undefined Construction: ' + ast.construction;
     }
 }

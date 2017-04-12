@@ -12,7 +12,10 @@ get('analyze').onclick = () => {
         } else {
             get('result').innerText = 'Malformed expression: ' + res.message;
         }
+
+        get("ast").value = JSON.stringify(ast, null, 2);
     } catch (e) {
         get('result').innerText = e;
+        get("ast").value = '';
     }
 }

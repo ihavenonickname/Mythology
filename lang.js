@@ -130,7 +130,7 @@ const accumulateBinaryExpression = operator => {
     const left = semanticStack.pop();
 
     semanticStack.push({
-        tag: 'expression',
+        construction: 'expression',
         operator: operator,
         left: left,
         right: right
@@ -236,7 +236,7 @@ const numericExpressionLevel3 = (symbols) => {
         consume('number')(symbols);
 
         semanticStack.push({
-            tag: 'literal',
+            construction: 'literal',
             value: parseFloat(symbol.lexeme)
         });
     }
@@ -249,15 +249,15 @@ const generateAST = (symbols) => {
 }
 
 const check = ast => {
-    if (ast.tag === 'literal') {
+    if (ast.construction === 'literal') {
         return {
             ok: true,
             type: 'numeric'
         };
     }
 
-    if (ast.tag !== 'expression') {
-        throw 'Tag? ' + ast.tag;
+    if (ast.construction !== 'expression') {
+        throw 'Construction? ' + ast.construction;
     }
 
     const left = check(ast.left);

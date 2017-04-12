@@ -130,7 +130,7 @@ const accumulateBinaryExpression = operator => {
     const left = semanticStack.pop();
 
     semanticStack.push({
-        construction: 'expression',
+        construction: 'binary expression',
         operator: operator,
         left: left,
         right: right
@@ -200,6 +200,8 @@ const numericExpression = (symbols) => {
                 accumulateBinaryExpression(operator);
 
                 consumed = true;
+
+                break;
             }
         }
     } while (consumed);
@@ -220,14 +222,18 @@ const numericExpressionLevel2 = (symbols) => {
                 accumulateBinaryExpression(operator);
 
                 consumed = true;
+
+                break;
             }
         }
     } while (consumed);
 }
 
 const numericExpressionLevel3 = (symbols) => {
+    const isNegative = tryConsume('minus')(symbols);
+
     if (tryConsume('left parenthesis')(symbols)) {
-        numericExpression(symbols);
+        comparisonExpression(symbols);
 
         consume('right parenthesis')(symbols);
     } else {
@@ -240,6 +246,16 @@ const numericExpressionLevel3 = (symbols) => {
             value: parseFloat(symbol.lexeme)
         });
     }
+
+    if (isNegative) {
+        const expr = semanticStack.pop();
+
+        semanticStack.push({
+            construction: 'unary expression',
+            operator: 'minus',
+            expression: expr
+        });
+    }
 }
 
 const generateAST = (symbols) => {
@@ -248,99 +264,95 @@ const generateAST = (symbols) => {
     return semanticStack.pop();
 }
 
-const check = ast => {
-    if (ast.construction === 'literal') {
-        return {
-            ok: true,
-            type: 'numeric'
-        };
-    }
+const analyzeLiteral = ast => {
+    return {
+        ok: true,
+        type: 'numeric'
+    };
+}
 
-    if (ast.construction !== 'expression') {
-        throw 'Construction? ' + ast.construction;
-    }
-
-    const left = check(ast.left);
-    const right = check(ast.right);
+const analyzeBinaryExpression = ast => {
+    const left = analyze(ast.left);
+    const right = analyze(ast.right);
 
     if (left.error || right.error) {
-        return left.error || right.error;
+        return left.error ? left : right;
+    }
+
+    const checkTypes = operandType => returnType => {
+        if (left.type !== operandType) {
+            return {
+                error: true,
+                symbol: ast.left,
+                message: `Should be ${operandType} type`
+            }
+        }
+
+        if (right.type !== operandType) {
+            return {
+                error: true,
+                symbol: ast.right,
+                message: `Should be ${operandType} type`
+            }
+        }
+
+        return {
+            ok: true,
+            type: returnType
+        };
     }
 
     const numericOperators = ['plus', 'minus', 'asterisk', 'slash'];
 
     if (numericOperators.indexOf(ast.operator) !== -1) {
-        if (left.type !== 'numeric') {
-            return {
-                error: true,
-                symbol: ast.left,
-                message: 'Should be numeric type'
-            }
-        }
-
-        if (right.type !== 'numeric') {
-            return {
-                error: true,
-                symbol: ast.right,
-                message: 'Should be numeric type'
-            }
-        }
-
-        return {
-            ok: true,
-            type: 'numeric'
-        }
+        return checkTypes('numeric')('numeric');
     }
 
     const comparisonOperators = ['equal', 'different', 'greater', 'greater or equal', 'less', 'less or equal'];
 
     if (comparisonOperators.indexOf(ast.operator) !== -1) {
-        if (left.type !== 'numeric') {
-            return {
-                error: true,
-                symbol: ast.left,
-                message: 'Should be numeric type'
-            }
-        }
-
-        if (right.type !== 'numeric') {
-            return {
-                error: true,
-                symbol: ast.right,
-                message: 'Should be numeric type'
-            }
-        }
-
-        return {
-            ok: true,
-            type: 'boolean'
-        }
+        return checkTypes('numeric')('boolean');
     }
 
     const logicOperators = ['and', 'or'];
 
     if (logicOperators.indexOf(ast.operator) !== -1) {
-        if (left.type !== 'boolean') {
-            return {
-                error: true,
-                symbol: ast.left,
-                message: 'Should be boolean type'
-            }
-        }
+        return checkTypes('boolean')('boolean');
+    }
 
-        if (right.type !== 'boolean') {
-            return {
-                error: true,
-                symbol: ast.right,
-                message: 'Should be boolean type'
-            }
-        }
+    throw 'Bad operator: ' + ast.operator;
+}
 
+const analyzeUnaryExpression = ast => {
+    const analyzedExpr = analyze(ast.expression);
+
+    if (analyzedExpr.error) {
+        return analyzedExpr;
+    }
+
+    if (analyzedExpr.type !== 'numeric') {
         return {
-            ok: true,
-            type: 'boolean'
+            error: true,
+            symbol: ast.expression,
+            message: `Should be numeric type`
         }
     }
 
-    throw 'Operator? ' + ast.operator;
+    return {
+        ok: true,
+        type: 'numeric'
+    };
+}
+
+const analyze = ast => {
+    switch (ast.construction) {
+    case 'literal':
+        return analyzeLiteral(ast);
+    case 'binary expression':
+        return analyzeBinaryExpression(ast);
+    case 'unary expression':
+        return analyzeUnaryExpression(ast);
+    default:
+        throw 'Undefined Construction: ' + ast.construction;
+    }
 }

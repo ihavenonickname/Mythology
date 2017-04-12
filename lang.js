@@ -61,7 +61,19 @@ const tokens = [
     },
     {
         name: 'boolean',
-        pattern: /^(true)|(false)\b/
+        pattern: /^((true)|(false))\b/
+    },
+    {
+        name: 'let keyword',
+        pattern: /^let\b/
+    },
+    {
+        name: 'assignment',
+        pattern: /^=/
+    },
+    {
+        name: 'identifier',
+        pattern: /^[a-zA-Z]\w*/
     }
 ]
 
@@ -138,6 +150,27 @@ const accumulateBinaryExpression = operator => {
         operator: operator,
         left: left,
         right: right
+    });
+}
+
+const assignmentStatement = (symbols) => {
+    consume('let keyword')(symbols);
+
+    const symbolIdentifier = symbols[0];
+
+    consume('identifier')(symbols);
+
+    consume("assignment")(symbols);
+
+    logicExpression(symbols);
+
+    const expr = semanticStack.pop();
+
+    semanticStack.push({
+        construction: 'statement',
+        statement: 'assignment',
+        identifier: symbolIdentifier.value,
+        expression: expr
     });
 }
 
@@ -272,7 +305,7 @@ const numericExpressionLevel3 = (symbols) => {
 }
 
 const generateAST = (symbols) => {
-    logicExpression(symbols);
+    assignmentStatement(symbols);
 
     return semanticStack.pop();
 }
@@ -369,6 +402,19 @@ const analyzeUnaryExpression = ast => {
     };
 }
 
+const analyzeStatement = ast => {
+    const exprAnalyzed = analyze(ast.expression);
+
+    if (exprAnalyzed.error) {
+        return exprAnalyzed;
+    }
+
+    return {
+        ok: true,
+        type: exprAnalyzed.type
+    };
+}
+
 const analyze = ast => {
     switch (ast.construction) {
         case 'literal':
@@ -377,6 +423,8 @@ const analyze = ast => {
             return analyzeBinaryExpression(ast);
         case 'unary expression':
             return analyzeUnaryExpression(ast);
+        case 'statement':
+            return analyzeStatement(ast);
         default:
             throw 'Undefined Construction: ' + ast.construction;
     }

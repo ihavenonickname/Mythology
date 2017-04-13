@@ -1,5 +1,9 @@
 const tokens = [
     {
+        name: 'semicolon',
+        pattern: /^;/
+    },
+    {
         name: 'plus',
         pattern: /^\+/
     },
@@ -24,7 +28,7 @@ const tokens = [
         pattern: /^\)/
     },
     {
-        name: 'number',
+        name: 'number literal',
         pattern: /^\d+(\.\d+)?/
     },
     {
@@ -60,7 +64,7 @@ const tokens = [
         pattern: /^\|\|/
     },
     {
-        name: 'boolean',
+        name: 'bool literal',
         pattern: /^((true)|(false))\b/
     },
     {
@@ -72,8 +76,36 @@ const tokens = [
         pattern: /^=/
     },
     {
-        name: 'identifier',
-        pattern: /^[a-zA-Z]\w*/
+        name: 'while keyword',
+        pattern: /^while\b/
+    },
+    {
+        name: 'do keyword',
+        pattern: /^do\b/
+    },
+    {
+        name: 'end keyword',
+        pattern: /^end\b/
+    },
+    {
+        name: 'if keyword',
+        pattern: /^if\b/
+    },
+    {
+        name: 'else keyword',
+        pattern: /^else\b/
+    },
+    {
+        name: 'number keyword',
+        pattern: /^number\b/
+    },
+    {
+        name: 'bool keyword',
+        pattern: /^bool\b/
+    },
+    {
+        name: 'identifier literal',
+        pattern: /^[a-zA-Z_]\w*/
     }
 ]
 
@@ -138,7 +170,7 @@ const consume = tokenName => symbols => {
 
     const s = symbols[0];
 
-    throw `Unexpected token "${s.token.name}" at position ${s.position}: ${s.lexeme}`;
+    throw `Unexpected token "${s.token.name}" at position ${s.position}: ${s.lexeme}. Expecting ${tokenName}`;
 }
 
 const accumulateBinaryExpression = operator => {
@@ -153,38 +185,145 @@ const accumulateBinaryExpression = operator => {
     });
 }
 
-const assignmentStatement = (symbols) => {
-    consume('let keyword')(symbols);
+const lookAhead = symbols => tokenName => {
+    return symbols.length > 0 && symbols[0].token.name === tokenName;
+}
+
+const statement = symbols => {
+    const firstTokenStatements = {
+        'while keyword': whileStatement,
+        'if keyword': ifStatement,
+        'number keyword': variableDeclaration,
+        'bool keyword': variableDeclaration,
+        'identifier literal': assignment
+    };
+
+    const nextStatement = Object.keys(firstTokenStatements).find(lookAhead(symbols));
+
+    if (nextStatement) {
+        firstTokenStatements[nextStatement](symbols);
+
+        return true;
+    }
+
+    return false;
+}
+
+const ifStatement = symbols => {
+    consume('if keyword')(symbols);
+
+    logicExpression(symbols);
+
+    const condition = semanticStack.pop();
+
+    consume('do keyword')(symbols);
+
+    const _if = {
+        construction: 'if statement',
+        condition: condition,
+        ifBody: [],
+        elseBody: []
+    }
+
+    while (statement(symbols)) {
+        _if.ifBody.push(semanticStack.pop());
+    }
+
+    if (tryConsume('else keyword')(symbols)) {
+        while (statement(symbols)) {
+            _if.elseBody.push(semanticStack.pop());
+        }
+    }
+
+    consume('end keyword')(symbols);
+
+    semanticStack.push(_if);
+}
+
+const whileStatement = symbols => {
+    consume('while keyword')(symbols);
+
+    logicExpression(symbols);
+
+    const condition = semanticStack.pop();
+
+    consume('do keyword')(symbols);
+
+    const _while = {
+        construction: 'while statement',
+        condition: condition,
+        body: []
+    }
+
+    while (statement(symbols)) {
+        _while.body.push(semanticStack.pop());
+    }
+
+    consume('end keyword')(symbols);
+
+    semanticStack.push(_while);
+}
+
+const variableDeclaration = symbols => {
+    let declarationKeyword = '';
+
+    if (tryConsume('number keyword')(symbols)) {
+        declarationKeyword = 'number'
+    } else if (tryConsume('bool keyword')(symbols)) {
+        declarationKeyword = 'bool'
+    }
 
     const symbolIdentifier = symbols[0];
 
-    consume('identifier')(symbols);
+    consume('identifier literal')(symbols);
 
     consume("assignment")(symbols);
 
     logicExpression(symbols);
 
+    consume('semicolon')(symbols);
+
     const expr = semanticStack.pop();
 
     semanticStack.push({
-        construction: 'statement',
-        statement: 'assignment',
-        identifier: symbolIdentifier.value,
+        construction: 'variable declaration',
+        declarationKeyword: declarationKeyword,
+        identifier: symbolIdentifier.lexeme,
         expression: expr
     });
 }
 
-const logicExpression = (symbols) => {
+const assignment = symbols => {
+    const symbolIdentifier = symbols[0];
+
+    consume('identifier literal')(symbols);
+
+    consume('assignment')(symbols);
+
+    logicExpression(symbols);
+
+    consume('semicolon')(symbols);
+
+    const expr = semanticStack.pop();
+
+    semanticStack.push({
+        construction: 'assignment',
+        identifier: symbolIdentifier.lexeme,
+        expression: expr
+    });
+}
+
+const logicExpression = symbols => {
     logicExpressionLevel2(symbols);
 
     if (tryConsume('or')(symbols)) {
-        logicExpression(symbols);
+        logicExpressionLevel2(symbols);
 
         accumulateBinaryExpression('or');
     }
 }
 
-const logicExpressionLevel2 = (symbols) => {
+const logicExpressionLevel2 = symbols => {
     comparisonExpression(symbols);
 
     if (tryConsume('and')(symbols)) {
@@ -194,12 +333,12 @@ const logicExpressionLevel2 = (symbols) => {
     }
 }
 
-const comparisonExpression = (symbols) => {
+const comparisonExpression = symbols => {
     comparisonExpressionLevel2(symbols);
 
     for (let operator of ['equal', 'different']) {
         if (tryConsume(operator)(symbols)) {
-            comparisonExpression(symbols);
+            comparisonExpressionLevel2(symbols);
 
             accumulateBinaryExpression(operator);
 
@@ -208,12 +347,12 @@ const comparisonExpression = (symbols) => {
     }
 }
 
-const comparisonExpressionLevel2 = (symbols) => {
+const comparisonExpressionLevel2 = symbols => {
     numericExpression(symbols);
 
     for (let operator of ['greater', 'greater or equal', 'less', 'less or equal']) {
         if (tryConsume(operator)(symbols)) {
-            comparisonExpression(symbols);
+            numericExpression(symbols);
 
             accumulateBinaryExpression(operator);
 
@@ -222,7 +361,7 @@ const comparisonExpressionLevel2 = (symbols) => {
     }
 }
 
-const numericExpression = (symbols) => {
+const numericExpression = symbols => {
     numericExpressionLevel2(symbols);
 
     let consumed = false;
@@ -232,7 +371,7 @@ const numericExpression = (symbols) => {
 
         for (let operator of ['plus', 'minus']) {
             if (tryConsume(operator)(symbols)) {
-                numericExpression(symbols);
+                numericExpressionLevel2(symbols);
 
                 accumulateBinaryExpression(operator);
 
@@ -244,7 +383,7 @@ const numericExpression = (symbols) => {
     } while (consumed);
 }
 
-const numericExpressionLevel2 = (symbols) => {
+const numericExpressionLevel2 = symbols => {
     numericExpressionLevel3(symbols);
 
     let consumed = false;
@@ -254,7 +393,7 @@ const numericExpressionLevel2 = (symbols) => {
 
         for (let operator of ['asterisk', 'slash']) {
             if (tryConsume(operator)(symbols)) {
-                numericExpression(symbols);
+                numericExpressionLevel3(symbols);
 
                 accumulateBinaryExpression(operator);
 
@@ -266,7 +405,7 @@ const numericExpressionLevel2 = (symbols) => {
     } while (consumed);
 }
 
-const numericExpressionLevel3 = (symbols) => {
+const numericExpressionLevel3 = symbols => {
     const isNegative = tryConsume('minus')(symbols);
 
     if (tryConsume('left parenthesis')(symbols)) {
@@ -276,17 +415,23 @@ const numericExpressionLevel3 = (symbols) => {
     } else {
         const symbol = symbols[0];
 
-        if (tryConsume('number')(symbols)) {
+        if (tryConsume('number literal')(symbols)) {
             semanticStack.push({
                 construction: 'literal',
                 value: symbol.lexeme,
-                tokenName: 'number'
+                tokenName: 'number literal'
             });
-        } else if (tryConsume('boolean')(symbols)) {
+        } else if (tryConsume('bool literal')(symbols)) {
             semanticStack.push({
                 construction: 'literal',
                 value: symbol.lexeme,
-                tokenName: 'boolean'
+                tokenName: 'bool literal'
+            });
+        } else if (tryConsume('identifier literal')(symbols)) {
+            semanticStack.push({
+                construction: 'literal',
+                value: symbol.lexeme,
+                tokenName: 'identifier literal'
             });
         } else {
             throw 'Invalid token, expecting literal or left parenthesis: ' + symbol[0];
@@ -304,23 +449,27 @@ const numericExpressionLevel3 = (symbols) => {
     }
 }
 
-const generateAST = (symbols) => {
-    assignmentStatement(symbols);
-
-    return semanticStack.pop();
-}
-
 const analyzeLiteral = ast => {
     let response = {
         ok: true
     };
 
     switch (ast.tokenName) {
-        case 'number':
+        case 'number literal':
             response.type = 'numeric'
             break;
-        case 'boolean':
+        case 'bool literal':
             response.type = 'boolean'
+            break;
+        case 'identifier literal':
+            if (!variableTable[ast.value]) {
+                return {
+                    ok: false,
+                    message: `Identifier ${ast.value} not declared`
+                };
+            }
+
+            response.type = variableTable[ast.value];
             break;
         default:
             throw 'Bad token name: ' + ast.tokenName;
@@ -333,14 +482,14 @@ const analyzeBinaryExpression = ast => {
     const left = analyze(ast.left);
     const right = analyze(ast.right);
 
-    if (left.error || right.error) {
-        return left.error ? left : right;
+    if (!left.ok || !right.ok) {
+        return left.ok ? right : left;
     }
 
     const checkTypes = operandType => returnType => {
         if (left.type !== operandType) {
             return {
-                error: true,
+                ok: false,
                 symbol: ast.left,
                 message: `Should be ${operandType} type`
             }
@@ -348,7 +497,7 @@ const analyzeBinaryExpression = ast => {
 
         if (right.type !== operandType) {
             return {
-                error: true,
+                ok: false,
                 symbol: ast.right,
                 message: `Should be ${operandType} type`
             }
@@ -384,13 +533,13 @@ const analyzeBinaryExpression = ast => {
 const analyzeUnaryExpression = ast => {
     const analyzedExpr = analyze(ast.expression);
 
-    if (analyzedExpr.error) {
+    if (!analyzedExpr.ok) {
         return analyzedExpr;
     }
 
     if (analyzedExpr.type !== 'numeric') {
         return {
-            error: true,
+            ok: false,
             symbol: ast.expression,
             message: `Should be numeric type`
         }
@@ -402,18 +551,147 @@ const analyzeUnaryExpression = ast => {
     };
 }
 
-const analyzeStatement = ast => {
+const analyzeVariableDeclaration = ast => {
+    if (variableTable[ast.identifier]) {
+        return {
+            ok: false,
+            message: 'Variable already declared: ' + ast.identifier
+        };
+    }
+
     const exprAnalyzed = analyze(ast.expression);
 
-    if (exprAnalyzed.error) {
+    if (!exprAnalyzed.ok) {
         return exprAnalyzed;
+    }
+
+    let declarationType = '';
+
+    switch (ast.declarationKeyword) {
+        case 'number':
+            declarationType = 'numeric';
+            break;
+        case 'bool':
+            declarationType = 'boolean';
+            break;
+        default:
+            throw 'Bad declaration keyword:' + ast.declarationKeyword;
+    }
+    if (declarationType !== exprAnalyzed.type) {
+        return {
+            ok: false,
+            message: `Should be ${declarationType} type`
+        };
+    }
+
+    variableTable[ast.identifier] = declarationType;
+
+    return {
+        ok: true,
+        type: 'none'
+    };
+}
+
+const analyzeWhileStatement = ast => {
+    const conditionAnalyzed = analyze(ast.condition);
+
+    if (!conditionAnalyzed.ok) {
+        return conditionAnalyzed;
+    }
+
+    if (conditionAnalyzed.type !== 'boolean') {
+        return {
+            ok: false,
+            symbol: ast.condition,
+            message: `Should be boolean type`
+        };
+    }
+
+    for (let member of ast.body) {
+        const memberAnalyzed = analyze(member);
+
+        if (!memberAnalyzed.ok) {
+            return memberAnalyzed;
+        }
     }
 
     return {
         ok: true,
-        type: exprAnalyzed.type
+        type: 'none'
     };
 }
+
+const analyzeIfStatement = ast => {
+    const conditionAnalyzed = analyze(ast.condition);
+
+    if (!conditionAnalyzed.ok) {
+        return conditionAnalyzed;
+    }
+
+    if (conditionAnalyzed.type !== 'boolean') {
+        return {
+            ok: false,
+            message: 'Should be boolean type'
+        };
+    }
+
+    for (let member of ast.ifBody.concat(ast.elseBody)) {
+        const memberAnalyzed = analyze(member);
+
+        if (!memberAnalyzed.ok) {
+            return memberAnalyzed;
+        }
+    }
+
+    return {
+        ok: true,
+        type: 'none'
+    }
+}
+
+const analyzeAssignment = ast => {
+    if (!variableTable[ast.identifier]) {
+        return {
+            ok: false,
+            message: `Identifier ${ast.identifier} not declared`
+        };
+    }
+
+    const exprAnalyzed = analyze(ast.expression);
+
+    if (!exprAnalyzed.ok) {
+        return exprAnalyzed;
+    }
+
+    if (variableTable[ast.identifier] !== exprAnalyzed.type) {
+        return {
+            ok: false,
+            message: `Cannot assign ${exprAnalyzed.type} to ${variableTable[ast.identifier]} variable`
+        };
+    }
+
+    return {
+        ok: true,
+        type: variableTable[ast.identifier]
+    };
+}
+
+const analyzeProgram = ast => {
+    for (let member of ast.body) {
+        const memberAnalyzed = analyze(member);
+
+        if (!memberAnalyzed.ok) {
+            return memberAnalyzed;
+        }
+    }
+
+    return {
+        ok: true,
+        type: 'none'
+    };
+}
+
+let variableTable = {};
 
 const analyze = ast => {
     switch (ast.construction) {
@@ -423,9 +701,35 @@ const analyze = ast => {
             return analyzeBinaryExpression(ast);
         case 'unary expression':
             return analyzeUnaryExpression(ast);
-        case 'statement':
-            return analyzeStatement(ast);
+        case 'variable declaration':
+            return analyzeVariableDeclaration(ast);
+        case 'assignment':
+            return analyzeAssignment(ast);
+        case 'while statement':
+            return analyzeWhileStatement(ast);
+        case 'if statement':
+            return analyzeIfStatement(ast);
+        case 'program':
+            variableTable = {};
+            return analyzeProgram(ast);
         default:
             throw 'Undefined Construction: ' + ast.construction;
     }
+}
+
+const generateAST = symbols => {
+    const program = {
+        construction: 'program',
+        body: []
+    }
+
+    while (symbols.length > 0) {
+        if (!statement(symbols)) {
+            throw 'Invalid statement:' + symbols[0].lexeme;
+        }
+
+        program.body.push(semanticStack.pop());
+    }
+
+    return program;
 }

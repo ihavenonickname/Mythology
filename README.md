@@ -14,55 +14,61 @@ A small, simple and strong programming language.
         assignment
 
     while :=
-        'while' logic-expression 'do' statement-list 'end'
+        'while' expression 'do' statement-list 'end'
 
     if :=
-        'if' logic-expression 'do' statement-list 'end'
-        'if' logic-expression 'do' statement-list 'else' statement-list 'end'
+        'if' expression 'do' statement-list 'end'
+        'if' expression 'do' statement-list 'else' statement-list 'end'
 
     variable-declaration :=
-        type identifier '=' logic-expression
+        type identifier '=' expression
 
     assignment :=
-        identifier '=' logic-expression
+        identifier '=' expression
 
-    logic-expression :=
-        logic-expression-2
-        logic-expression-2 'or' logic-expression-2
+    expression :=
+        expression-2
+        expression-2 'or' expression-2
 
-    logic-expression-2 :=
-        comparison-expression
-        comparison-expression 'and' comparison-expression
+    expression-2 :=
+        expression-3
+        expression-3 'and' expression-3
 
-    comparison-expression :=
-        comparison-expression-2
-        comparison-expression-2 '==' comparison-expression-2
-        comparison-expression-2 '!=' comparison-expression-2
+    expression-3 :=
+        expression-4
+        expression-4 '==' expression-4
+        expression-4 '!=' expression-4
 
-    comparison-expression-2 :=
-        numeric-expression
-        numeric-expression '>'  numeric-expression
-        numeric-expression '>=' numeric-expression
-        numeric-expression '<'  numeric-expression
-        numeric-expression '<=' numeric-expression
+    expression-4 :=
+        expression-5
+        expression-5 '>'  expression-5
+        expression-5 '>=' expression-5
+        expression-5 '<'  expression-5
+        expression-5 '<=' expression-5
 
-    numeric-expression :=
-        numeric-expression-2
-        numeric-expression-2 '+' numeric-expression-2
-        numeric-expression-2 '-' numeric-expression-2
+    expression-5 :=
+        expression-6
+        expression-6 '+' expression-6
+        expression-6 '-' expression-6
 
-    numeric-expression-2 :=
-        numeric-expression-3
-        numeric-expression-3 '*' numeric-expression-3
-        numeric-expression-3 '/' numeric-expression-3
+    expression-6 :=
+        expression-7
+        expression-7 '*' expression-7
+        expression-7 '/' expression-7
 
-    numeric-expression-4
-        '-' '(' logic-expression ')'
+    expression-7
+        '-' '(' expression ')'
         '-' number-literal
-        '(' logic-expression ')'
+        '-' identifier arguments
+        '(' expression ')'
         number-literal
         bool-literal
         text-literal
+        identifier
+        identifier arguments
+
+    arguments :=
+        '(' expression list separeted by comma ')'
 
     type :=
         'number'

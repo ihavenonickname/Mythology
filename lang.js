@@ -36,14 +36,6 @@ const tokens = [
         pattern: /^\d+(\.\d+)?/
     },
     {
-        name: 'equal',
-        pattern: /^==/
-    },
-    {
-        name: 'different',
-        pattern: /^!=/
-    },
-    {
         name: 'greater or equal',
         pattern: /^>=/
     },
@@ -60,16 +52,24 @@ const tokens = [
         pattern: /^>/
     },
     {
-        name: 'and',
-        pattern: /^&&/
-    },
-    {
-        name: 'or',
-        pattern: /^\|\|/
-    },
-    {
         name: 'bool literal',
         pattern: /^((true)|(false))\b/
+    },
+    {
+        name: 'is keyword',
+        pattern: /^is\b/
+    },
+    {
+        name: 'isnt keyword',
+        pattern: /^isnt\b/
+    },
+    {
+        name: 'and keyword',
+        pattern: /^and\b/
+    },
+    {
+        name: 'or keyword',
+        pattern: /^or\b/
     },
     {
         name: 'let keyword',
@@ -353,27 +353,27 @@ const functionCall = symbols => {
 const expression = symbols => {
     expressionLevel2(symbols);
 
-    if (tryConsume('or')(symbols)) {
+    if (tryConsume('or keyword')(symbols)) {
         expressionLevel2(symbols);
 
-        accumulateBinaryExpression('or');
+        accumulateBinaryExpression('or keyword');
     }
 }
 
 const expressionLevel2 = symbols => {
     expressionLevel3(symbols);
 
-    if (tryConsume('and')(symbols)) {
+    if (tryConsume('and keyword')(symbols)) {
         expressionLevel3(symbols);
 
-        accumulateBinaryExpression('and');
+        accumulateBinaryExpression('and keyword');
     }
 }
 
 const expressionLevel3 = symbols => {
     expressionLevel4(symbols);
 
-    for (let operator of ['equal', 'different']) {
+    for (let operator of ['is keyword', 'isnt keyword']) {
         if (tryConsume(operator)(symbols)) {
             expressionLevel4(symbols);
 
@@ -585,15 +585,15 @@ const analyzeBinaryExpression = ast => {
         case 'asterisk':
         case 'slash':
             return checkTypes('numeric')('numeric');
-        case 'equal':
-        case 'different':
+        case 'is keyword':
+        case 'isnt keyword':
         case 'greater':
         case 'greater or equal':
         case 'less':
         case 'less or equal':
             return checkTypes('numeric')('boolean');
-        case 'and':
-        case 'or':
+        case 'and keyword':
+        case 'or keyword':
             return checkTypes('boolean')('boolean');
     }
 

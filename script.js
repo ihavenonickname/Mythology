@@ -13,10 +13,10 @@ get('analyze').onclick = () => {
             get("ast").value = JSON.stringify(ast, null, 4);
         } else {
             get("ast").value = '';
-            get('result').innerText = 'Malformed expression: ' + analyzis.message;
+            get('result').innerHTML = 'Malformed expression <p>' + analyzis.message + '</p>';
         }
     } catch (e) {
-        get('result').innerText = e;
+        get('result').innerHTML = '<strong>Exception while parsing</strong><p>' + e + '</p>';
         get("ast").value = '';
     }
 }

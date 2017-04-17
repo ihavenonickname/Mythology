@@ -7,16 +7,16 @@ print("\n\n");
 if n_lines >= 1 do
   number i = 0;
 
-  while i < n_lines do
-    number j = 0;
-
-    while j < n_lines do
+  while i < n_lines * n_lines do
+    if modulo(i, 2) is 0 do
       print("x");
-
-      j = j + 1;
+    else
+      print("o");
     end
 
-    print("\n");
+    if modulo(i, n_lines) is 0 do
+      print("\n");
+    end
 
     i = i + 1;
   end

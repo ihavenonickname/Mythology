@@ -56,6 +56,10 @@ const tokens = [
         pattern: /^((true)|(false))\b/
     },
     {
+        name: 'text literal',
+        pattern: /^"[^"]*"/
+    },
+    {
         name: 'is keyword',
         pattern: /^is\b/
     },
@@ -106,6 +110,10 @@ const tokens = [
     {
         name: 'bool keyword',
         pattern: /^bool\b/
+    },
+    {
+        name: 'text keyword',
+        pattern: /^text\b/
     },
     {
         name: 'identifier literal',
@@ -201,6 +209,7 @@ const statement = symbols => {
         'if keyword': ifStatement,
         'number keyword': variableDeclaration,
         'bool keyword': variableDeclaration,
+        'text keyword': variableDeclaration,
         'identifier literal': ambiguityAssignmentFunctionCall
     };
 
@@ -289,6 +298,10 @@ const variableDeclaration = symbols => {
         declarationKeyword = 'number'
     } else if (tryConsume('bool keyword')(symbols)) {
         declarationKeyword = 'bool'
+    } else if (tryConsume('text keyword')(symbols)) {
+        declarationKeyword = 'text'
+    } else {
+        throw 'Not a valid type: ' + symbols[0].lexeme
     }
 
     const symbolIdentifier = symbols[0];
@@ -464,6 +477,12 @@ const expressionLevel7 = symbols => {
                 value: symbol.lexeme,
                 tokenName: symbol.token.name
             });
+        } else if (tryConsume('text literal')(symbols)) {
+            semanticStack.push({
+                construction: 'literal',
+                value: symbol.lexeme.substring(1, symbol.lexeme.length - 1),
+                tokenName: symbol.token.name
+            });
         } else if (tryConsume('identifier literal')(symbols)) {
             if (lookAhead(symbols)('left parenthesis')) {
                 argumentList(symbols);
@@ -531,6 +550,9 @@ const analyzeLiteral = ast => {
         case 'bool literal':
             response.type = 'boolean'
             break;
+        case 'text literal':
+            response.type = 'textual'
+            break;
         case 'identifier literal':
             if (!environment.variables[ast.value]) {
                 return {
@@ -554,6 +576,21 @@ const analyzeBinaryExpression = ast => {
 
     if (!left.ok || !right.ok) {
         return left.ok ? right : left;
+    }
+
+    if (ast.operator === 'plus' && left.type === 'textual') {
+        if (right.type !== 'textual') {
+            return {
+                ok: false,
+                symbol: ast.left,
+                message: `Right-hand side of plus should be textual`
+            }
+        }
+
+        return {
+            ok: true,
+            type: 'textual'
+        };
     }
 
     const checkTypes = operandType => returnType => {
@@ -644,9 +681,13 @@ const analyzeVariableDeclaration = ast => {
         case 'bool':
             declarationType = 'boolean';
             break;
+        case 'text':
+            declarationType = 'textual';
+            break;
         default:
             throw 'Bad declaration keyword:' + ast.declarationKeyword;
     }
+
     if (declarationType !== exprAnalyzed.type) {
         return {
             ok: false,
@@ -808,16 +849,40 @@ let environment = {
 
 const defaultFunctions = {
     number_to_bool: {
-        returnType: 'boolean',
-        argsTypes: ['numeric']
+        argsTypes: ['numeric'],
+        returnType: 'boolean'
+    },
+    number_to_text: {
+        argsTypes: ['numeric'],
+        returnType: 'textual'
     },
     bool_to_number: {
-        returnType: 'numeric',
-        argsTypes: ['boolean']
+        argsTypes: ['boolean'],
+        returnType: 'numeric'
+    },
+    bool_to_text: {
+        argsTypes: ['boolean'],
+        returnType: 'textual'
+    },
+    text_to_number: {
+        argsTypes: ['textual'],
+        returnType: 'numeric'
+    },
+    text_to_bool: {
+        argsTypes: ['textual'],
+        returnType: 'boolean'
     },
     modulo: {
-        returnType: 'numeric',
-        argsTypes: ['numeric', 'numeric']
+        argsTypes: ['numeric', 'numeric'],
+        returnType: 'numeric'
+    },
+    input: {
+        argsTypes: [],
+        returnType: 'textual'
+    },
+    print: {
+        argsTypes: ['textual'],
+        returnType: 'none'
     }
 };
 

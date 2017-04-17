@@ -1,19 +1,27 @@
-<textarea id="source" cols="80" rows="17">
-number i = 1;
-number j = 1;
+<textarea id="source" cols="80" rows="24">
+print("How many lines?\n");
+number n_lines = text_to_number(input());
 
-while i <= 10 do
-  while j <= 10 do
-    if modulo(j, 2) is 0 do
+print("\n\n");
 
-    else
+if n_lines >= 1 do
+  number i = 0;
 
+  while i < n_lines do
+    number j = 0;
+
+    while j < n_lines do
+      print("x");
+
+      j = j + 1;
     end
 
-    j = j + 1;
-  end
+    print("\n");
 
-  i = i + 1;
+    i = i + 1;
+  end
+else
+  print("Should be at least one line!");
 end
 </textarea>
 

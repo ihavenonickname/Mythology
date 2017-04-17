@@ -201,7 +201,7 @@ const statement = symbols => {
         'if keyword': ifStatement,
         'number keyword': variableDeclaration,
         'bool keyword': variableDeclaration,
-        'identifier literal': assignment
+        'identifier literal': ambiguityAssignmentFunctionCall
     };
 
     const nextStatement = Object.keys(firstTokenStatements).find(lookAhead(symbols));
@@ -213,6 +213,18 @@ const statement = symbols => {
     }
 
     return false;
+}
+
+const ambiguityAssignmentFunctionCall = symbols => {
+    if (symbols.length < 2) {
+        throw 'Unexpected end of input';
+    }
+
+    if (symbols[1].token.name === 'assignment') {
+        assignment(symbols);
+    } else {
+        functionCall(symbols);
+    }
 }
 
 const ifStatement = symbols => {
@@ -316,6 +328,25 @@ const assignment = symbols => {
         construction: 'assignment',
         identifier: symbolIdentifier.lexeme,
         expression: expr
+    });
+}
+
+const functionCall = symbols => {
+    const symbolIdentifier = symbols[0];
+
+    consume('identifier literal')(symbols);
+
+    argumentList(symbols);
+
+    consume('semicolon')(symbols);
+
+    const args = semanticStack.pop();
+
+    semanticStack.push({
+        construction: 'function call',
+        context: 'statement',
+        identifier: symbolIdentifier.lexeme,
+        args: args
     });
 }
 
@@ -441,6 +472,7 @@ const expressionLevel7 = symbols => {
 
                 semanticStack.push({
                     construction: 'function call',
+                    context: 'expression',
                     identifier: symbol.lexeme,
                     args: args
                 });
@@ -500,14 +532,14 @@ const analyzeLiteral = ast => {
             response.type = 'boolean'
             break;
         case 'identifier literal':
-            if (!typesTable.variables[ast.value]) {
+            if (!environment.variables[ast.value]) {
                 return {
                     ok: false,
                     message: `Variable '${ast.value}' not declared`
                 };
             }
 
-            response.type = typesTable.variables[ast.value];
+            response.type = environment.variables[ast.value];
             break;
         default:
             throw 'Bad token name: ' + ast.tokenName;
@@ -590,7 +622,7 @@ const analyzeUnaryExpression = ast => {
 }
 
 const analyzeVariableDeclaration = ast => {
-    if (typesTable.variables[ast.identifier]) {
+    if (environment.variables[ast.identifier]) {
         return {
             ok: false,
             message: `Variable '${ast.identifier}' already declared`
@@ -622,7 +654,7 @@ const analyzeVariableDeclaration = ast => {
         };
     }
 
-    typesTable.variables[ast.identifier] = declarationType;
+    environment.variables[ast.identifier] = declarationType;
 
     return {
         ok: true,
@@ -688,7 +720,7 @@ const analyzeIfStatement = ast => {
 }
 
 const analyzeAssignment = ast => {
-    const typeInfo = typesTable.variables[ast.identifier];
+    const typeInfo = environment.variables[ast.identifier];
 
     if (!typeInfo) {
         return {
@@ -717,7 +749,7 @@ const analyzeAssignment = ast => {
 }
 
 const analyzeFunctionCall = ast => {
-    const typeInfo = typesTable.functions[ast.identifier];
+    const typeInfo = environment.functions[ast.identifier];
 
     if (!typeInfo) {
         return {
@@ -750,7 +782,7 @@ const analyzeFunctionCall = ast => {
 
     return {
         ok: true,
-        type: typeInfo.returnType
+        type: ast.context === 'expression' ? typeInfo.returnType : 'none'
     };
 }
 
@@ -769,7 +801,7 @@ const analyzeProgram = ast => {
     };
 }
 
-let typesTable = {
+let environment = {
     variables: {},
     functions: {}
 };
@@ -808,7 +840,7 @@ const analyze = ast => {
         case 'if statement':
             return analyzeIfStatement(ast);
         case 'program':
-            typesTable = {
+            environment = {
                 variables: {},
                 functions: defaultFunctions
             };

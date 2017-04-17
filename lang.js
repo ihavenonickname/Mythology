@@ -116,6 +116,10 @@ const tokens = [
         pattern: /^text\b/
     },
     {
+        name: 'not keyword',
+        pattern: /^not\b/
+    },
+    {
         name: 'identifier literal',
         pattern: /^[a-zA-Z_]\w*/
     }
@@ -157,7 +161,11 @@ const symbolize = input => {
     return symbols;
 }
 
-/////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+let lastConsumedSymbol = null;
 
 const tryConsume = tokenName => symbols => {
     if (symbols.length === 0) {
@@ -168,7 +176,7 @@ const tryConsume = tokenName => symbols => {
         return false;
     }
 
-    symbols.shift();
+    lastConsumedSymbol = symbols.shift();
 
     return true;
 }
@@ -199,11 +207,13 @@ const accumulateBinaryExpression = operator => {
     });
 }
 
-const lookAhead = symbols => tokenName => {
-    return symbols.length > 0 && symbols[0].token.name === tokenName;
-}
+const lookAhead = k => symbols => symbols[k - 1].token.name;
 
 const statement = symbols => {
+    if (symbols.length === 0) {
+        return false;
+    }
+
     const firstTokenStatements = {
         'while keyword': whileStatement,
         'if keyword': ifStatement,
@@ -213,12 +223,12 @@ const statement = symbols => {
         'identifier literal': ambiguityAssignmentFunctionCall
     };
 
-    const nextStatement = Object.keys(firstTokenStatements).find(lookAhead(symbols));
+    for (let tokenName of Object.keys(firstTokenStatements)) {
+        if (lookAhead(1)(symbols) === tokenName) {
+            firstTokenStatements[tokenName](symbols);
 
-    if (nextStatement) {
-        firstTokenStatements[nextStatement](symbols);
-
-        return true;
+            return true;
+        }
     }
 
     return false;
@@ -229,10 +239,10 @@ const ambiguityAssignmentFunctionCall = symbols => {
         throw 'Unexpected end of input';
     }
 
-    if (symbols[1].token.name === 'assignment') {
+    if (lookAhead(2)(symbols) === 'assignment') {
         assignment(symbols);
     } else {
-        functionCall(symbols);
+        functionCall(symbols)('statement');
     }
 }
 
@@ -304,9 +314,9 @@ const variableDeclaration = symbols => {
         throw 'Not a valid type: ' + symbols[0].lexeme
     }
 
-    const symbolIdentifier = symbols[0];
-
     consume('identifier literal')(symbols);
+
+    const identifier = lastConsumedSymbol.lexeme;
 
     consume("assignment")(symbols);
 
@@ -319,15 +329,15 @@ const variableDeclaration = symbols => {
     semanticStack.push({
         construction: 'variable declaration',
         declarationKeyword: declarationKeyword,
-        identifier: symbolIdentifier.lexeme,
+        identifier: identifier,
         expression: expr
     });
 }
 
 const assignment = symbols => {
-    const symbolIdentifier = symbols[0];
-
     consume('identifier literal')(symbols);
+
+    const identifier = lastConsumedSymbol.lexeme;
 
     consume('assignment')(symbols);
 
@@ -339,26 +349,28 @@ const assignment = symbols => {
 
     semanticStack.push({
         construction: 'assignment',
-        identifier: symbolIdentifier.lexeme,
+        identifier: identifier,
         expression: expr
     });
 }
 
-const functionCall = symbols => {
-    const symbolIdentifier = symbols[0];
-
+const functionCall = symbols => context => {
     consume('identifier literal')(symbols);
+
+    const identifier = lastConsumedSymbol.lexeme;
 
     argumentList(symbols);
 
-    consume('semicolon')(symbols);
+    if (context === 'statement') {
+        consume('semicolon')(symbols);
+    }
 
     const args = semanticStack.pop();
 
     semanticStack.push({
         construction: 'function call',
-        context: 'statement',
-        identifier: symbolIdentifier.lexeme,
+        context: context,
+        identifier: identifier,
         args: args
     });
 }
@@ -456,64 +468,94 @@ const expressionLevel6 = symbols => {
 }
 
 const expressionLevel7 = symbols => {
-    const isNegative = tryConsume('minus')(symbols);
+    let operator = null;
 
-    if (tryConsume('left parenthesis')(symbols)) {
-        expression(symbols);
-
-        consume('right parenthesis')(symbols);
-    } else {
-        const symbol = symbols[0];
-
-        if (tryConsume('number literal')(symbols)) {
-            semanticStack.push({
-                construction: 'literal',
-                value: symbol.lexeme,
-                tokenName: symbol.token.name
-            });
-        } else if (tryConsume('bool literal')(symbols)) {
-            semanticStack.push({
-                construction: 'literal',
-                value: symbol.lexeme,
-                tokenName: symbol.token.name
-            });
-        } else if (tryConsume('text literal')(symbols)) {
-            semanticStack.push({
-                construction: 'literal',
-                value: symbol.lexeme.substring(1, symbol.lexeme.length - 1),
-                tokenName: symbol.token.name
-            });
-        } else if (tryConsume('identifier literal')(symbols)) {
-            if (lookAhead(symbols)('left parenthesis')) {
-                argumentList(symbols);
-
-                const args = semanticStack.pop();
-
-                semanticStack.push({
-                    construction: 'function call',
-                    context: 'expression',
-                    identifier: symbol.lexeme,
-                    args: args
-                });
-            } else {
-                semanticStack.push({
-                    construction: 'literal',
-                    value: symbol.lexeme,
-                    tokenName: symbol.token.name
-                });
-            }
-        } else {
-            throw 'Invalid token, expecting literal or left parenthesis: ' + symbol[0];
-        }
+    if (tryConsume('minus')(symbols)) {
+        operator = 'minus';
+    } else if (tryConsume('not keyword')(symbols)) {
+        operator = 'not';
     }
 
-    if (isNegative) {
+    expressionLevel8(symbols);
+
+    if (operator) {
         const expr = semanticStack.pop();
 
         semanticStack.push({
             construction: 'unary expression',
-            operator: 'minus',
+            operator: operator,
             expression: expr
+        });
+    }
+}
+
+const expressionLevel8 = symbols => {
+    if (tryConsume('left parenthesis')(symbols)) {
+        expression(symbols);
+
+        consume('right parenthesis')(symbols);
+
+        return;
+    }
+
+    switch (lookAhead(1)(symbols)) {
+        case 'number literal':
+            numberLiteral(symbols);
+            break;
+        case 'bool literal':
+            boolLiteral(symbols);
+            break;
+        case 'text literal':
+            textLiteral(symbols);
+            break;
+        case 'identifier literal':
+            ambiguityIdentifierLiteralFunctionCall(symbols);
+            break;
+        default:
+            throw 'Invalid token, expecting literal or left parenthesis: ' + symbol[0];
+    }
+}
+
+const numberLiteral = symbols => {
+    consume('number literal')(symbols)
+
+    semanticStack.push({
+        construction: 'literal',
+        value: lastConsumedSymbol.lexeme,
+        tokenName: lastConsumedSymbol.token.name
+    });
+}
+
+const boolLiteral = symbols => {
+    consume('bool literal')(symbols)
+
+    semanticStack.push({
+        construction: 'literal',
+        value: lastConsumedSymbol.lexeme,
+        tokenName: lastConsumedSymbol.token.name
+    });
+}
+
+const textLiteral = symbols => {
+    consume('text literal')(symbols)
+
+    semanticStack.push({
+        construction: 'literal',
+        value: lastConsumedSymbol.lexeme.substring(1, lastConsumedSymbol.lexeme.length - 1),
+        tokenName: lastConsumedSymbol.token.name
+    });
+}
+
+const ambiguityIdentifierLiteralFunctionCall = symbols => {
+    if (lookAhead(2)(symbols) === 'left parenthesis') {
+        functionCall(symbols)('expression');
+    } else {
+        consume('identifier literal')(symbols);
+
+        semanticStack.push({
+            construction: 'literal',
+            value: lastConsumedSymbol.lexeme,
+            tokenName: lastConsumedSymbol.token.name
         });
     }
 }
@@ -536,7 +578,9 @@ const argumentList = symbols => {
     semanticStack.push(args);
 }
 
-/////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const analyzeLiteral = ast => {
     let response = {
@@ -644,18 +688,37 @@ const analyzeUnaryExpression = ast => {
         return analyzedExpr;
     }
 
-    if (analyzedExpr.type !== 'numeric') {
+    if (ast.operator === 'minus') {
+        if (analyzedExpr.type === 'numeric') {
+            return {
+                ok: true,
+                type: 'numeric'
+            };
+        }
+
         return {
             ok: false,
             symbol: ast.expression,
             message: `Only numeric expression can be negative`
-        }
+        };
     }
 
-    return {
-        ok: true,
-        type: 'numeric'
-    };
+    if (ast.operator === 'not') {
+        if (analyzedExpr.type === 'boolean') {
+            return {
+                ok: true,
+                type: 'boolean'
+            };
+        }
+
+        return {
+            ok: false,
+            symbol: ast.expression,
+            message: `Only boolean expression can be negated`
+        };
+    }
+
+    throw 'Not a valid unary operator: ' + ast.operator;
 }
 
 const analyzeVariableDeclaration = ast => {

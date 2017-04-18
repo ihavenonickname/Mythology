@@ -2,6 +2,19 @@
 
 A small, simple and type safe programming language
 
+### Getting started
+
+    $ git clone https://github.com/ihavenonickname/Mythology.git
+    $ cd Mythology
+    $ echo print("Hello world from Mythology"); > script.myth
+    $ node mythology script.myth --run
+
+CLI options are
+
+* `--run` Runs your code
+* `--ast` Prints the AST of your code
+
+
 ### Grammar
 
     program :=
@@ -93,19 +106,6 @@ A small, simple and type safe programming language
 
     text :=
         "[^"]*"
-
-
-### Getting started
-
-    $ git clone https://github.com/ihavenonickname/Mythology.git
-    $ cd Mythology
-    $ echo print("Hello world from Mythology"); > script.myth
-    $ node mythology script.myth --run
-
-CLI options are
-
-* `--run` Runs your code
-* `--ast` Prints the AST of your code
 
 -------------------------
 

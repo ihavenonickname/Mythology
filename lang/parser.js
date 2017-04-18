@@ -127,35 +127,40 @@ const tokens = [
 
 const semanticStack = [];
 
+const removeComments = input => input.replace(/#[\w\d\s]*\n/g, '');
+
+const nextSymbol = input => {
+    for (let token of tokens) {
+        const res = token.pattern.exec(input);
+
+        if (res !== null) {
+            return {
+                token: token,
+                lexeme: res[0]
+            };
+        }
+    }
+
+    return null;
+}
+
 const symbolize = input => {
     const symbols = [];
-    let inputTrimmed = input.trim();
+    let inputTrimmed = removeComments(input);
 
     while (inputTrimmed.length > 0) {
         inputTrimmed = inputTrimmed.trim();
 
-        const oldLength = symbols.length;
-        let pos = input.length - inputTrimmed.length + 1;
+        const pos = input.length - inputTrimmed.length + 1;
+        const symbol = nextSymbol(inputTrimmed);
 
-        for (let token of tokens) {
-            const res = token.pattern.exec(inputTrimmed);
-
-            if (res !== null) {
-                inputTrimmed = inputTrimmed.substring(res[0].length);
-
-                symbols.push({
-                    token: token,
-                    lexeme: res[0],
-                    position: pos
-                });
-
-                break;
-            }
+        if (!symbol) {
+            throw `Unexpected character at position ${pos}: ${inputTrimmed[0]}`;
         }
 
-        if (oldLength === symbols.length) {
-            throw `Unexpected character at position ${pos}: ${inputTrimmed[0]} `;
-        }
+        symbol.position = pos;
+        symbols.push(symbol);
+        inputTrimmed = inputTrimmed.substring(symbol.lexeme.length);
     }
 
     return symbols;

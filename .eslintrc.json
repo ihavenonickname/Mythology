@@ -1,0 +1,12 @@
+{
+    "extends": "eslint:recommended",
+    "plugins": [
+        "standard",
+        "promise"
+    ],
+    "rules": {
+        "react/jsx-sort-prop-types": "off",
+        "no-console": "off",
+        "no-constant-condition": "off"
+    }
+}

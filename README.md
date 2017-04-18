@@ -12,6 +12,10 @@ A small, simple and strong programming language.
         if
         variable-declaration
         assignment
+        function-call
+
+    function-call :=
+        identifier arguments
 
     while :=
         'while' expression 'do' statement-list 'end'
@@ -36,8 +40,8 @@ A small, simple and strong programming language.
 
     expression-3 :=
         expression-4
-        expression-4 '==' expression-4
-        expression-4 '!=' expression-4
+        expression-4 'is' expression-4
+        expression-4 'isnt' expression-4
 
     expression-4 :=
         expression-5
@@ -56,16 +60,18 @@ A small, simple and strong programming language.
         expression-7 '*' expression-7
         expression-7 '/' expression-7
 
-    expression-7
-        '-' '(' expression ')'
-        '-' number-literal
-        '-' identifier arguments
+    expression-7 :=
+        expression-8
+        '-' expression-8
+        'not' expression-8
+
+    expression-8
         '(' expression ')'
-        number-literal
-        bool-literal
-        text-literal
+        number
+        bool
+        text
         identifier
-        identifier arguments
+        function-call
 
     arguments :=
         '(' expression list separeted by comma ')'
@@ -78,18 +84,22 @@ A small, simple and strong programming language.
     identifier :=
         [a-zA-Z_][\w_]*
 
-    bool-literal :=
+    bool :=
         'true'
         'false'
 
-    number-literal :=
+    number :=
         \d+(\.\d+)?
 
-    text-literal :=
+    text :=
         "[^"]*"
 
 
-[Try it online](https://ihavenonickname.github.io/Mythology/)
+###Getting started
+
+    $ git clone https://github.com/ihavenonickname/Mythology.git
+    $ cd Mythology
+    $ node mythology <my-script.myth> [--run] [--ast]
 
 -------------------------
 

@@ -95,7 +95,7 @@ A small, simple and strong programming language.
         "[^"]*"
 
 
-###Getting started
+### Getting started
 
     $ git clone https://github.com/ihavenonickname/Mythology.git
     $ cd Mythology

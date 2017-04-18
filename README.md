@@ -1,6 +1,6 @@
 # Mythology
 
-A small, simple and strong programming language.
+A small, simple and type safe programming language
 
 ### Grammar
 
@@ -10,9 +10,9 @@ A small, simple and strong programming language.
     statement :=
         while
         if
-        variable-declaration
-        assignment
-        function-call
+        variable-declaration ';'
+        assignment ';'
+        function-call ';'
 
     function-call :=
         identifier arguments
@@ -99,7 +99,13 @@ A small, simple and strong programming language.
 
     $ git clone https://github.com/ihavenonickname/Mythology.git
     $ cd Mythology
-    $ node mythology <my-script.myth> [--run] [--ast]
+    $ echo print("Hello world from Mythology"); > script.myth
+    $ node mythology script.myth --run
+
+CLI options are
+
+* `--run` Runs your code
+* `--ast` Prints the AST of your code
 
 -------------------------
 

@@ -107,6 +107,52 @@ CLI options are
     text :=
         "[^"]*"
 
+
+### Example
+
+    function do_stuff (text str) text do
+        number count = 8;
+
+        while count > 0 do
+            print(str);
+
+            count = count - 1;
+        end
+
+        draw_matrix(10);
+
+        return "Works like a charm";
+    end
+
+    function draw_matrix (number size) do
+        number n_row = 0;
+
+        while n_row < size do
+            number n_col = 0;
+            text line = "";
+
+            while n_col < size do
+                if modulo(n_col + n_row, 2) is 0 do
+                    line = line + "X ";
+                else
+                    line = line + "O ";
+                end
+
+                n_col = n_col + 1;
+            end
+
+            print(line);
+
+            n_row = n_row + 1;
+        end
+    end
+
+    function main () do
+        print(do_stuff("mythology"));
+    end
+
+
+
 -------------------------
 
 This project is in very early stages

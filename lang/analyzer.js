@@ -242,7 +242,7 @@ const analyzeAssignment = ast => {
 }
 
 const analyzeFunctionCall = ast => {
-    const typeInfo = environment.functions[ast.identifier];
+    const typeInfo = environment.functionSignatures[ast.identifier];
 
     if (!typeInfo) {
         return {
@@ -279,12 +279,165 @@ const analyzeFunctionCall = ast => {
     };
 }
 
-const analyzeProgram = ast => {
+const analyzeReturn = ast => {
+    if (!ast.expression) {
+        return {
+            ok: true,
+            type: 'none'
+        };
+    }
+
+    const analyzedExpr = analyze(ast.expression);
+
+    if (!analyzedExpr.ok) {
+        return analyzedExpr;
+    }
+
+    return {
+        ok: true,
+        type: analyzedExpr.type
+    };
+}
+
+const analyzeFunction = ast => {
+    for (let arg of ast.args) {
+        environment.variables[arg.name] = arg.type;
+    }
+
     for (let member of ast.body) {
         const memberAnalyzed = analyze(member);
 
         if (!memberAnalyzed.ok) {
             return memberAnalyzed;
+        }
+    }
+
+    const verifyTypeReturning = statements => {
+        const returns = [];
+
+        for (let stmt of statements) {
+            if (stmt.construction === 'return') {
+                if (stmt.expression) {
+                    returns.push(analyze(stmt).type);
+                }
+            }
+
+            if (stmt.construction === 'while statement') {
+                returns.push(...verifyTypeReturning(stmt.body));
+            } else if (stmt.construction === 'if statement') {
+                returns.push(...verifyTypeReturning(stmt.ifBody));
+                returns.push(...verifyTypeReturning(stmt.elseBody));
+            }
+        }
+
+        return returns;
+    }
+
+    const returns = verifyTypeReturning(ast.body);
+
+    environment.variables = {};
+
+    if (ast.type === 'none') {
+        if (returns.length > 0) {
+            return {
+                ok: false,
+                message: `'${ast.name}' function should return none`
+            };
+        }
+
+        return {
+            ok: true,
+            type: 'none'
+        };
+    }
+
+    for (let returnType of returns) {
+        if (returnType !== ast.type) {
+            return {
+                ok: false,
+                message: `Function ${ast.name} cannot return ${returnType}`
+            };
+        }
+    }
+
+    const verifyAllCodePaths = _if => {
+        if (_if.elseBody.length === 0) {
+            return false;
+        }
+
+        let ifBodyReturns = false;
+
+        for (let member of _if.ifBody) {
+            if (member.construction === 'return') {
+                ifBodyReturns = true;
+                break;
+            }
+
+            if (member.construction === 'if statement' && verifyAllCodePaths(member)) {
+                ifBodyReturns = true;
+                break;
+            }
+        }
+
+        if (!ifBodyReturns) {
+            return false;
+        }
+
+        for (let member of _if.elseBody) {
+            if (member.construction === 'return') {
+                return true;
+            }
+
+            if (member.construction === 'if statement' && verifyAllCodePaths(member)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    for (let member of ast.body) {
+        if (member.construction === 'return') {
+            return {
+                ok: true,
+                type: 'none'
+            };
+        }
+
+        if (member.construction === 'if statement' && verifyAllCodePaths(member)) {
+            return {
+                ok: true,
+                type: 'none'
+            };
+        }
+    }
+
+    return {
+        ok: false,
+        message: `Function '${ast.name}' does not return on all code paths`
+    };
+}
+
+const analyzeProgram = ast => {
+    if (!ast.functions['main']) {
+        return {
+            ok: false,
+            message: `No 'main' function found`
+        };
+    }
+
+    for (let name of Object.keys(ast.functions)) {
+        environment.functionSignatures[name] = {
+            argsTypes: ast.functions[name].args.map(arg => arg.type),
+            returnType: ast.functions[name].type
+        };
+    }
+
+    for (let name of Object.keys(ast.functions)) {
+        const functionAnalyzed = analyze(ast.functions[name]);
+
+        if (!functionAnalyzed.ok) {
+            return functionAnalyzed;
         }
     }
 
@@ -296,7 +449,7 @@ const analyzeProgram = ast => {
 
 let environment = {
     variables: {},
-    functions: {}
+    functionSignatures: {}
 };
 
 const defaultFunctions = {
@@ -358,10 +511,14 @@ const analyze = ast => {
             return analyzeWhileStatement(ast);
         case 'if statement':
             return analyzeIfStatement(ast);
+        case 'function':
+            return analyzeFunction(ast);
+        case 'return':
+            return analyzeReturn(ast);
         case 'program':
             environment = {
                 variables: {},
-                functions: defaultFunctions
+                functionSignatures: defaultFunctions
             };
 
             return analyzeProgram(ast);

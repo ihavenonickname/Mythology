@@ -1,21 +1,18 @@
 const readline = require('readline');
 
-const defaultEnvironment = () => {
-    return {
-        variables: {},
-        functions: {
-            number_to_bool: (number => number !== 0),
-            number_to_text: (number => number + ''),
-            bool_to_number: (bool => bool ? 1 : 0),
-            bool_to_text: (bool => bool + ''),
-            text_to_number: (text => parseFloat(text)),
-            text_to_bool: (text => text === 'true'),
-            modulo: ((n1, n2) => n1 % n2),
-            input: (() => readline()),
-            print: (text => console.log(text))
-        }
-    };
-}
+const defaultFunctions = {
+    number_to_bool: (number => number !== 0),
+    number_to_text: (number => number + ''),
+    bool_to_number: (bool => bool ? 1 : 0),
+    bool_to_text: (bool => bool + ''),
+    text_to_number: (text => parseFloat(text)),
+    text_to_bool: (text => text === 'true'),
+    modulo: ((n1, n2) => n1 % n2),
+    input: (() => readline()),
+    print: (text => console.log(text))
+};
+
+const declaredFunctions = {};
 
 const evalLiteral = ast => {
     switch (ast.type) {
@@ -71,29 +68,46 @@ const evalFunctionCall = ast => environment => {
         args.push(evaluate(arg)(environment));
     }
 
-    if (ast.context === 'statement') {
-        environment.functions[ast.identifier](...args);
+    if (defaultFunctions[ast.identifier]) {
+        if (ast.context === 'expression') {
+            return defaultFunctions[ast.identifier](...args);
+        }
 
-        return;
+        defaultFunctions[ast.identifier](...args);
+
+        return { returning: false };
+    }
+
+    const _function = declaredFunctions[ast.identifier];
+    const newEnvironment = {};
+
+    for (let arg of _function.args) {
+        newEnvironment[arg.name] = args.shift();
     }
 
     if (ast.context === 'expression') {
-        return environment.functions[ast.identifier](...args);
+        return evaluate(_function)(newEnvironment).value;
     }
 
-    throw `Invalid context calling '${ast.identifier}': ${ast.context}`
+    evaluate(_function)(newEnvironment);
+
+    return { returning: false };
 }
 
 const evalVariableDeclaration = ast => environment => {
-    environment.variables[ast.identifier] = evaluate(ast.expression)(environment);
+    environment[ast.identifier] = evaluate(ast.expression)(environment);
+
+    return { returning: false };
 }
 
 const evalAssignment = ast => environment => {
-    environment.variables[ast.identifier] = evaluate(ast.expression)(environment);
+    environment[ast.identifier] = evaluate(ast.expression)(environment);
+
+    return { returning: false };
 }
 
 const evalIdentifier = ast => environment => {
-    return environment.variables[ast.name];
+    return environment[ast.name];
 }
 
 const evalIf = ast => environment => {
@@ -101,22 +115,47 @@ const evalIf = ast => environment => {
     const body = condition ? ast.ifBody : ast.elseBody;
 
     for (let member of body) {
-        evaluate(member)(environment);
+        const evaluated = evaluate(member)(environment);
+
+        if (evaluated.returning) {
+            return evaluated;
+        }
     }
+
+    return { returning: false };
 }
 
 const evalWhile = ast => environment => {
     while (evaluate(ast.condition)(environment)) {
         for (let member of ast.body) {
-            evaluate(member)(environment);
+            const evaluated = evaluate(member)(environment);
+
+            if (evaluated.returning) {
+                return evaluated;
+            }
         }
     }
+
+    return { returning: false };
 }
 
-const evalProgram = ast => environment => {
+const evalReturn = ast => environment => {
+    return {
+        returning: true,
+        value: ast.expression ? evaluate(ast.expression)(environment) : null
+    };
+}
+
+const evalFunction = ast => environment => {
     for (let member of ast.body) {
-        evaluate(member)(environment);
+        const evaluated = evaluate(member)(environment);
+
+        if (evaluated.returning) {
+            return evaluated;
+        }
     }
+
+    return { returning: true };
 }
 
 const evaluate = ast => environment => {
@@ -137,11 +176,19 @@ const evaluate = ast => environment => {
             return evalIf(ast)(environment);
         case 'while statement':
             return evalWhile(ast)(environment);
-        case 'program':
-            return evalProgram(ast)(environment);
+        case 'return':
+            return evalReturn(ast)(environment);
+        case 'function':
+            return evalFunction(ast)(environment);
         default:
             throw 'Undefined construction: ' + ast.construction;
     }
 }
 
-module.exports = ast => evaluate(ast)(defaultEnvironment());
+module.exports = ast => {
+    for (let name of Object.keys(ast.functions)) {
+        declaredFunctions[name] = ast.functions[name];
+    }
+
+    evaluate(declaredFunctions['main'])({});
+}

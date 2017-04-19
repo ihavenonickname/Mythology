@@ -120,7 +120,15 @@ const tokens = [
         pattern: /^not\b/
     },
     {
-        name: 'identifier literal',
+        name: 'function keyword',
+        pattern: /^function\b/
+    },
+    {
+        name: 'return keyword',
+        pattern: /^return\b/
+    },
+    {
+        name: 'identifier',
         pattern: /^[a-zA-Z_]\w*/
     }
 ]
@@ -229,8 +237,11 @@ const statement = symbols => {
         case 'text keyword':
             variableDeclaration(symbols);
             return true;
-        case 'identifier literal':
+        case 'identifier':
             ambiguityAssignmentFunctionCall(symbols);
+            return true;
+        case 'return keyword':
+            functionReturn(symbols);
             return true;
         default:
             return false;
@@ -317,7 +328,7 @@ const variableDeclaration = symbols => {
         throw 'Not a valid type: ' + symbols[0].lexeme
     }
 
-    consume('identifier literal')(symbols);
+    consume('identifier')(symbols);
 
     const identifier = lastConsumedSymbol.lexeme;
 
@@ -338,7 +349,7 @@ const variableDeclaration = symbols => {
 }
 
 const assignment = symbols => {
-    consume('identifier literal')(symbols);
+    consume('identifier')(symbols);
 
     const identifier = lastConsumedSymbol.lexeme;
 
@@ -358,7 +369,7 @@ const assignment = symbols => {
 }
 
 const functionCall = symbols => context => {
-    consume('identifier literal')(symbols);
+    consume('identifier')(symbols);
 
     const identifier = lastConsumedSymbol.lexeme;
 
@@ -376,6 +387,24 @@ const functionCall = symbols => context => {
         identifier: identifier,
         args: args
     });
+}
+
+const functionReturn = symbols => {
+    consume('return keyword')(symbols);
+
+    const _return = {
+        construction: 'return'
+    };
+
+    if (!tryConsume('semicolon')(symbols)) {
+        expression(symbols);
+
+        _return.expression = semanticStack.pop();
+
+        consume('semicolon')(symbols);
+    }
+
+    semanticStack.push(_return);
 }
 
 const expression = symbols => {
@@ -511,8 +540,8 @@ const expressionLevel8 = symbols => {
         case 'text literal':
             textLiteral(symbols);
             break;
-        case 'identifier literal':
-            ambiguityIdentifierLiteralFunctionCall(symbols);
+        case 'identifier':
+            ambiguityIdentifierFunctionCall(symbols);
             break;
         default:
             throw 'Invalid token, expecting literal or left parenthesis: ' + symbols[0];
@@ -549,7 +578,7 @@ const textLiteral = symbols => {
     });
 }
 
-const ambiguityIdentifierLiteralFunctionCall = symbols => {
+const ambiguityIdentifierFunctionCall = symbols => {
     if (symbols.length < 2) {
         throw 'Expecting left parenthesis or identifier';
     }
@@ -557,7 +586,7 @@ const ambiguityIdentifierLiteralFunctionCall = symbols => {
     if (symbols[1].token.name === 'left parenthesis') {
         functionCall(symbols)('expression');
     } else {
-        consume('identifier literal')(symbols);
+        consume('identifier')(symbols);
 
         semanticStack.push({
             construction: 'identifier',
@@ -584,20 +613,103 @@ const argumentList = symbols => {
     semanticStack.push(args);
 }
 
+const typedArgumentList = symbols => {
+    consume('left parenthesis')(symbols);
+
+    const args = [];
+
+    if (!tryConsume('right parenthesis')(symbols)) {
+        let type = 'none';
+
+        do {
+            if (tryConsume('number keyword')(symbols)) {
+                type = 'number';
+            } else if (tryConsume('bool keyword')(symbols)) {
+                type = 'bool';
+            } else if (tryConsume('text keyword')(symbols)) {
+                type = 'text';
+            } else {
+                throw `Expecting a type`;
+            }
+
+            consume('identifier')(symbols);
+
+            args.push({
+                name: lastConsumedSymbol.lexeme,
+                type: type
+            });
+        } while ((tryConsume('comma')(symbols)));
+
+        consume('right parenthesis')(symbols);
+    }
+
+    semanticStack.push(args);
+}
+
+const functionDeclaration = symbols => {
+    if (!tryConsume('function keyword')(symbols)) {
+        return false;
+    }
+
+    const _function = {
+        construction: 'function'
+    };
+
+    consume('identifier')(symbols);
+
+    _function.name = lastConsumedSymbol.lexeme;
+
+    typedArgumentList(symbols);
+
+    _function.args = semanticStack.pop();
+
+    if (tryConsume('do keyword')(symbols)) {
+        _function.type = 'none';
+    } else {
+        if (tryConsume('number keyword')(symbols)) {
+            _function.type = 'number';
+        } else if (tryConsume('bool keyword')(symbols)) {
+            _function.type = 'bool';
+        } else if (tryConsume('text keyword')(symbols)) {
+            _function.type = 'text';
+        } else {
+            throw `In declaration of '${_function.name}', expecting a type, found ${symbols[0].token.name}`;
+        }
+
+        consume('do keyword')(symbols);
+    }
+
+    _function.body = [];
+
+    while (!tryConsume('end keyword')(symbols)) {
+        if (!statement(symbols)) {
+            throw 'Not a valid statement: ' + symbols[0].lexeme;
+        }
+
+        _function.body.push(semanticStack.pop());
+    }
+
+    semanticStack.push(_function);
+
+    return true;
+}
+
 const parse = input => {
     const symbols = symbolize(input);
 
     const program = {
         construction: 'program',
-        body: []
+        functions: {}
     }
 
     while (symbols.length > 0) {
-        if (!statement(symbols)) {
-            throw 'Not a valid statement: ' + symbols[0].lexeme;
+        if (!functionDeclaration(symbols)) {
+            throw 'Not a valid function declaration: ' + symbols[0].lexeme;
         }
 
-        program.body.push(semanticStack.pop());
+        const _function = semanticStack.pop();
+
+        program.functions[_function.name] = _function;
     }
 
     return program;

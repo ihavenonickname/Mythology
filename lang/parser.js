@@ -135,7 +135,7 @@ const tokens = [
 
 const semanticStack = [];
 
-const removeComments = input => input.replace(/#[\w\d\s]*\n/g, '');
+const removeComments = input => input.replace(/#.*/g, '');
 
 const nextSymbol = input => {
     for (let token of tokens) {

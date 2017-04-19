@@ -30,6 +30,7 @@ CLI options are
         return "Works like a charm";
     end
 
+    # We got a comment
     function draw_matrix (number size) do
         number n_row = 0;
 
@@ -47,7 +48,7 @@ CLI options are
                 n_col = n_col + 1;
             end
 
-            print(line);
+            print(line); # Yep, a comment
 
             n_row = n_row + 1;
         end

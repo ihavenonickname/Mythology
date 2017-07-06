@@ -61,6 +61,17 @@ const evalBinaryOperation = ast => environment => {
     }
 }
 
+const evalUnaryOperation = ast => environment => {
+    const expr = evaluate(ast.expression)(environment);
+
+    switch (ast.operation) {
+        case 'negative':
+            return -expr;
+        default:
+            throw 'Bad unary operation: ' + ast.operation;
+    }
+}
+
 const evalFunctionCall = ast => environment => {
     const args = [];
 
@@ -111,10 +122,17 @@ const evalIdentifier = ast => environment => {
 }
 
 const evalIf = ast => environment => {
-    const condition = evaluate(ast.condition)(environment);
-    const body = condition ? ast.ifBody : ast.elseBody;
+    let body = ast.elseBody;
 
-    for (let member of body) {
+    for (const branch of ast.conditionalBranches) {
+        if (evaluate(branch.condition)(environment)) {
+            body = branch.body;
+            
+            break;
+        }
+    }
+
+    for (const member of body) {
         const evaluated = evaluate(member)(environment);
 
         if (evaluated.returning) {
@@ -164,6 +182,8 @@ const evaluate = ast => environment => {
             return evalLiteral(ast);
         case 'function call':
             return evalFunctionCall(ast)(environment);
+        case 'unary operation':
+            return evalUnaryOperation(ast)(environment);
         case 'binary operation':
             return evalBinaryOperation(ast)(environment);
         case 'variable declaration':

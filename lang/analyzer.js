@@ -185,20 +185,30 @@ const analyzeWhileStatement = ast => {
 }
 
 const analyzeIfStatement = ast => {
-    const conditionAnalyzed = analyze(ast.condition);
+    for (const branch of ast.conditionalBranches) {
+        const conditionAnalyzed = analyze(branch.condition);
 
-    if (!conditionAnalyzed.ok) {
-        return conditionAnalyzed;
+        if (!conditionAnalyzed.ok) {
+            return conditionAnalyzed;
+        }
+
+        if (conditionAnalyzed.type !== 'bool') {
+            return {
+                ok: false,
+                message: 'Only bool expressions in IF statement'
+            };
+        }
+
+        for (const member of branch.body) {
+            const memberAnalyzed = analyze(member);
+
+            if (!memberAnalyzed.ok) {
+                return memberAnalyzed;
+            }
+        }
     }
 
-    if (conditionAnalyzed.type !== 'bool') {
-        return {
-            ok: false,
-            message: 'Only bool expressions in IF statement'
-        };
-    }
-
-    for (let member of ast.ifBody.concat(ast.elseBody)) {
+    for (const member of ast.elseBody) {
         const memberAnalyzed = analyze(member);
 
         if (!memberAnalyzed.ok) {
@@ -325,7 +335,10 @@ const analyzeFunction = ast => {
             if (stmt.construction === 'while statement') {
                 returns.push(...verifyTypeReturning(stmt.body));
             } else if (stmt.construction === 'if statement') {
-                returns.push(...verifyTypeReturning(stmt.ifBody));
+                for (const member of stmt.conditionalBranches) {
+                    returns.push(...verifyTypeReturning(member.body));
+                }
+
                 returns.push(...verifyTypeReturning(stmt.elseBody));
             }
         }

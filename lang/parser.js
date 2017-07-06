@@ -104,6 +104,10 @@ const tokens = [
         pattern: /^else\b/
     },
     {
+        name: 'elif keyword',
+        pattern: /^elif\b/
+    },
+    {
         name: 'number keyword',
         pattern: /^number\b/
     },
@@ -271,13 +275,32 @@ const ifStatement = symbols => {
 
     const _if = {
         construction: 'if statement',
-        condition: condition,
-        ifBody: [],
+        conditionalBranches: [{
+            condition: condition,
+            body: []
+        }],
         elseBody: []
     }
 
     while (statement(symbols)) {
-        _if.ifBody.push(semanticStack.pop());
+        _if.conditionalBranches[0].body.push(semanticStack.pop());
+    }
+
+    while (tryConsume('elif keyword')(symbols)) {
+        expression(symbols);
+        
+        const branch = {
+            condition: semanticStack.pop(),
+            body: []
+        }
+
+        consume('do keyword')(symbols);
+
+        while (statement(symbols)) {
+            branch.body.push(semanticStack.pop());
+        }
+
+        _if.conditionalBranches.push(branch);
     }
 
     if (tryConsume('else keyword')(symbols)) {

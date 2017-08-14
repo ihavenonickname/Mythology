@@ -1,20 +1,19 @@
 # Mythology
 
-A small, simple and type safe programming language
+A small, simple and type safe programming language.
 
-### Getting started
+### Running
 
     $ git clone https://github.com/ihavenonickname/Mythology.git
     $ cd Mythology
-    $ echo print("Hello world from Mythology"); > script.myth
-    $ node mythology script.myth --run
+    $ node mythology <path to your myth script> <options>
 
 CLI options are
 
 * `--run` Runs your code
-* `--ast` Prints the AST of your code
+* `--ast` Prints the abstract syntax tree of your code
 
-### Getting started
+### Example code
 
     function do_stuff (text str) text do
         number count = 8;
@@ -58,6 +57,6 @@ CLI options are
         print(do_stuff("Hello world from Mythology"));
     end
 
--------------------------
+---
 
-This project is in very early stages
+This project is in very early stage.

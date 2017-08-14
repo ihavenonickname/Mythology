@@ -3,21 +3,29 @@ const parser = require('./lang/parser.js');
 const analyzer = require('./lang/analyzer.js');
 const interpreter = require('./lang/interpreter.js');
 
-const containsArg = arg => process.argv.slice(2).some(x => x === arg);
+const main = () => {
+    const args = process.argv.splice(2);
 
-try {
-    const source = fs.readFileSync(process.argv[2], 'utf8');
+    if (args.length === 0 || args.length > 3) {
+        console.log('node mythology <path to script> [--run|--ast]');
+
+        return;
+    }
+
+    const source = fs.readFileSync(args[0], 'utf8');
     const ast = parser(source);
-    const analyzis = analyzer(ast);
 
-    if (!analyzis.ok) {
-        console.log(analyzis.message);
-    } else if (containsArg('--ast')) {
+    if (args.indexOf('--ast') !== -1) {
         console.log(JSON.stringify(ast, null, 4));
-    } else {
+    }
+
+    if (args.indexOf('--run') !== -1) {
         interpreter(ast);
     }
+}
+
+try {
+    main();
 } catch (e) {
-    console.log('Exception');
     console.log(e);
 }
